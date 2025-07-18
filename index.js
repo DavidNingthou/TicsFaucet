@@ -1,5 +1,3 @@
-// index.js - Main server file
-
 const express = require('express');
 const { ethers } = require('ethers');
 const cors = require('cors');
@@ -16,13 +14,10 @@ const AMOUNT_TO_SEND = '0.1'; // 0.1 TICS
 const COOLDOWN_HOURS = 24;
 // --- END CONFIGURATION ---
 
-// --- CORS FIX ---
-// Be more specific about who can access this server.
-// IMPORTANT: Replace 'https://ticslab.xyz' with your actual domain if it's different.
-const allowedOrigins = ['https://ticslab.xyz', 'http://localhost:3000']; // Add localhost for testing
+const allowedOrigins = ['https://ticslab.xyz', 'http://localhost:3000']; 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+   
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
