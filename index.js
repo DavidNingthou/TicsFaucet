@@ -10,12 +10,11 @@ const PORT = process.env.PORT || 3000;
 const RPC_URL = 'https://rpc-testnet.qubetics.work';
 const FAUCET_PRIVATE_KEY = process.env.FAUCET_PRIVATE_KEY;
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY;
-const AMOUNT_TO_SEND = '0.1'; // 0.1 TICS
+const AMOUNT_TO_SEND = '1'; 
 const COOLDOWN_HOURS = 24;
 // --- END CONFIGURATION ---
 
-// --- CORS FIX ---
-// Added 'www' subdomain to the list of allowed origins.
+
 const allowedOrigins = [
     'https://ticslab.xyz', 
     'https://www.ticslab.xyz', 
@@ -31,9 +30,7 @@ const corsOptions = {
   }
 };
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Handle pre-flight requests
-// --- END CORS FIX ---
-
+app.options('*', cors(corsOptions)); 
 
 app.use(express.json());
 
