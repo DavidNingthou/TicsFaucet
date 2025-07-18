@@ -18,7 +18,7 @@ const COOLDOWN_HOURS = 24;
 const allowedOrigins = [
     'https://ticslab.xyz', 
     'https://www.ticslab.xyz', 
-    'http://localhost:3000' // For local testing
+    'http://localhost:3000' 
 ];
 const corsOptions = {
   origin: function (origin, callback) {
