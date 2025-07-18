@@ -6,8 +6,6 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
-app.use(express.json());
-app.use(cors()); // Allow your website to talk to this server
 
 // --- CONFIGURATION ---
 const PORT = process.env.PORT || 3000;
@@ -18,6 +16,30 @@ const AMOUNT_TO_SEND = '0.1'; // 0.1 TICS
 const COOLDOWN_HOURS = 24;
 // --- END CONFIGURATION ---
 
+// --- CORS FIX ---
+// Be more specific about who can access this server.
+// IMPORTANT: Replace 'https://ticslab.xyz' with your actual domain if it's different.
+const allowedOrigins = ['https://ticslab.xyz', 'http://localhost:3000']; // Add localhost for testing
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  }
+};
+app.use(cors(corsOptions));
+// Handle pre-flight requests for all routes
+app.options('*', cors(corsOptions));
+// --- END CORS FIX ---
+
+
+app.use(express.json());
+
+
 if (!FAUCET_PRIVATE_KEY || !RECAPTCHA_SECRET_KEY) {
     console.error("FATAL ERROR: Environment variables FAUCET_PRIVATE_KEY and RECAPTCHA_SECRET_KEY must be set.");
     process.exit(1);
@@ -26,13 +48,11 @@ if (!FAUCET_PRIVATE_KEY || !RECAPTCHA_SECRET_KEY) {
 const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
 const wallet = new ethers.Wallet(FAUCET_PRIVATE_KEY, provider);
 
-// Simple in-memory store for rate limiting (resets on server restart, fine for a testnet faucet)
 const requestLog = {};
 
-// Rate limit middleware to prevent basic spam
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // Limit each IP to 20 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 20,
     standardHeaders: true,
     legacyHeaders: false,
 });
@@ -46,7 +66,6 @@ app.post('/request-funds', limiter, async (req, res) => {
     const userIp = req.ip;
     const now = Date.now();
 
-    // 1. Validate Inputs
     if (!address || !recaptcha) {
         return res.status(400).json({ error: 'Address and reCAPTCHA are required.' });
     }
@@ -54,7 +73,6 @@ app.post('/request-funds', limiter, async (req, res) => {
         return res.status(400).json({ error: 'Invalid wallet address format.' });
     }
 
-    // 2. Verify reCAPTCHA
     try {
         const recaptchaUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${RECAPTCHA_SECRET_KEY}&response=${recaptcha}&remoteip=${userIp}`;
         const recaptchaResult = await fetch(recaptchaUrl).then(r => r.json());
@@ -66,7 +84,6 @@ app.post('/request-funds', limiter, async (req, res) => {
         return res.status(500).json({ error: 'Failed to verify reCAPTCHA.' });
     }
 
-    // 3. Check Cooldown
     const cooldownMs = COOLDOWN_HOURS * 60 * 60 * 1000;
     if (requestLog[address] && (now - requestLog[address] < cooldownMs)) {
         return res.status(429).json({ error: `You can only request funds once every ${COOLDOWN_HOURS} hours.` });
@@ -75,7 +92,6 @@ app.post('/request-funds', limiter, async (req, res) => {
         return res.status(429).json({ error: `This IP has already requested funds recently.` });
     }
 
-    // 4. Send Transaction
     try {
         console.log(`Sending ${AMOUNT_TO_SEND} TICS to ${address}`);
         const tx = await wallet.sendTransaction({
@@ -85,7 +101,6 @@ app.post('/request-funds', limiter, async (req, res) => {
         
         console.log(`Transaction sent! Hash: ${tx.hash}`);
 
-        // 5. Log successful request
         requestLog[address] = now;
         requestLog[userIp] = now;
 
