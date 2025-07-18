@@ -1,0 +1,103 @@
+// index.js - Main server file
+
+const express = require('express');
+const { ethers } = require('ethers');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+
+const app = express();
+app.use(express.json());
+app.use(cors()); // Allow your website to talk to this server
+
+// --- CONFIGURATION ---
+const PORT = process.env.PORT || 3000;
+const RPC_URL = 'https://rpc-testnet.qubetics.work';
+const FAUCET_PRIVATE_KEY = process.env.FAUCET_PRIVATE_KEY;
+const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY;
+const AMOUNT_TO_SEND = '0.1'; // 0.1 TICS
+const COOLDOWN_HOURS = 24;
+// --- END CONFIGURATION ---
+
+if (!FAUCET_PRIVATE_KEY || !RECAPTCHA_SECRET_KEY) {
+    console.error("FATAL ERROR: Environment variables FAUCET_PRIVATE_KEY and RECAPTCHA_SECRET_KEY must be set.");
+    process.exit(1);
+}
+
+const provider = new ethers.providers.JsonRpcProvider(RPC_URL);
+const wallet = new ethers.Wallet(FAUCET_PRIVATE_KEY, provider);
+
+// Simple in-memory store for rate limiting (resets on server restart, fine for a testnet faucet)
+const requestLog = {};
+
+// Rate limit middleware to prevent basic spam
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // Limit each IP to 20 requests per windowMs
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+app.get('/', (req, res) => {
+    res.send('Qubetics Faucet Server is running.');
+});
+
+app.post('/request-funds', limiter, async (req, res) => {
+    const { address, recaptcha } = req.body;
+    const userIp = req.ip;
+    const now = Date.now();
+
+    // 1. Validate Inputs
+    if (!address || !recaptcha) {
+        return res.status(400).json({ error: 'Address and reCAPTCHA are required.' });
+    }
+    if (!ethers.utils.isAddress(address)) {
+        return res.status(400).json({ error: 'Invalid wallet address format.' });
+    }
+
+    // 2. Verify reCAPTCHA
+    try {
+        const recaptchaUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${RECAPTCHA_SECRET_KEY}&response=${recaptcha}&remoteip=${userIp}`;
+        const recaptchaResult = await fetch(recaptchaUrl).then(r => r.json());
+        if (!recaptchaResult.success) {
+            return res.status(400).json({ error: 'reCAPTCHA verification failed.' });
+        }
+    } catch (e) {
+        console.error(e);
+        return res.status(500).json({ error: 'Failed to verify reCAPTCHA.' });
+    }
+
+    // 3. Check Cooldown
+    const cooldownMs = COOLDOWN_HOURS * 60 * 60 * 1000;
+    if (requestLog[address] && (now - requestLog[address] < cooldownMs)) {
+        return res.status(429).json({ error: `You can only request funds once every ${COOLDOWN_HOURS} hours.` });
+    }
+    if (requestLog[userIp] && (now - requestLog[userIp] < cooldownMs)) {
+        return res.status(429).json({ error: `This IP has already requested funds recently.` });
+    }
+
+    // 4. Send Transaction
+    try {
+        console.log(`Sending ${AMOUNT_TO_SEND} TICS to ${address}`);
+        const tx = await wallet.sendTransaction({
+            to: address,
+            value: ethers.utils.parseEther(AMOUNT_TO_SEND)
+        });
+        
+        console.log(`Transaction sent! Hash: ${tx.hash}`);
+
+        // 5. Log successful request
+        requestLog[address] = now;
+        requestLog[userIp] = now;
+
+        return res.status(200).json({ success: true, message: `${AMOUNT_TO_SEND} TICS sent successfully!`, txHash: tx.hash });
+
+    } catch (error) {
+        console.error("Transaction failed:", error);
+        return res.status(500).json({ error: 'Failed to send transaction. The faucet may be out of funds.' });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Faucet server listening on port ${PORT}`);
+    console.log(`Faucet address: ${wallet.address}`);
+});
