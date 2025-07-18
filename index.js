@@ -14,21 +14,24 @@ const AMOUNT_TO_SEND = '0.1'; // 0.1 TICS
 const COOLDOWN_HOURS = 24;
 // --- END CONFIGURATION ---
 
-const allowedOrigins = ['https://ticslab.xyz', 'http://localhost:3000']; 
+// --- CORS FIX ---
+// Added 'www' subdomain to the list of allowed origins.
+const allowedOrigins = [
+    'https://ticslab.xyz', 
+    'https://www.ticslab.xyz', 
+    'http://localhost:3000' // For local testing
+];
 const corsOptions = {
   origin: function (origin, callback) {
-   
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
-    return callback(null, true);
   }
 };
 app.use(cors(corsOptions));
-// Handle pre-flight requests for all routes
-app.options('*', cors(corsOptions));
+app.options('*', cors(corsOptions)); // Handle pre-flight requests
 // --- END CORS FIX ---
 
 
