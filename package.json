@@ -1,0 +1,15 @@
+{
+  "name": "qubetics-faucet-server",
+  "version": "1.0.0",
+  "description": "A simple gas-less faucet for Qubetics Testnet",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "ethers": "^5.7.2",
+    "express": "^4.18.2",
+    "express-rate-limit": "^6.7.0"
+  }
+}
